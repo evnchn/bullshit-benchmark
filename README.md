@@ -127,7 +127,7 @@ Use the `Benchmark Version` dropdown in the filters panel to switch between publ
 - This README is intentionally audience-facing.
 - Technical and maintainer-oriented content lives in `docs/TECHNICAL.md`.
 
-## Star History
+## Star History 
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=petergpt/bullshit-benchmark&type=Date&theme=dark" />
