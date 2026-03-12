@@ -1,6 +1,6 @@
 {
   "panel_id": "panel_merged_all_models_20260226_173526",
-  "timestamp_utc": "2026-03-07T21:11:35.651433+00:00",
+  "timestamp_utc": "2026-03-12T15:33:24.962683+00:00",
   "primary_judges": [
     "anthropic/claude-sonnet-4.6",
     "openai/gpt-5.2"
@@ -9,8 +9,8 @@
   "resumed": false,
   "parallelism": 12,
   "primary_judges_max_inflight": 24,
-  "disagreement_count": 969,
-  "disagreement_rate": 0.2149,
+  "disagreement_count": 1004,
+  "disagreement_rate": 0.2123,
   "consensus_method": "mean",
   "execution_mode": "manual_merge_append_latest",
   "source_panels": [
@@ -20,9 +20,10 @@
     "run_v1_gpt52chat_20260302_1638_panel",
     "run_v1_gpt53chat_gemini31flashlite_20260303_224524_panel",
     "run_v1_gpt54_openrouter_20260305_panel",
-    "run_v1_meta_trio_20260307_195222_panel"
+    "run_v1_meta_trio_20260307_195222_panel",
+    "run_grok420_full155_20260312_144856b_panel_openai3__v1"
   ],
-  "notes": "Appended new OpenAI GPT-5/5.1 family panel into existing merged latest snapshot without replacing prior model rows. Supplemental publish appended panel run_v1_gpt53chat_gemini31flashlite_20260303_224524_panel. Supplemental publish appended panel run_v1_gpt54_openrouter_20260305_panel. Supplemental publish appended panel run_v1_meta_trio_20260307_195222_panel.",
+  "notes": "Appended new OpenAI GPT-5/5.1 family panel into existing merged latest snapshot without replacing prior model rows. Supplemental publish appended panel run_v1_gpt53chat_gemini31flashlite_20260303_224524_panel. Supplemental publish appended panel run_v1_gpt54_openrouter_20260305_panel. Supplemental publish appended panel run_v1_meta_trio_20260307_195222_panel. Supplemental publish appended panel run_grok420_full155_20260312_144856b_panel_openai3__v1.",
   "panel_mode": "full",
   "judge_models": [
     "anthropic/claude-sonnet-4.6",
