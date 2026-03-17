@@ -1887,6 +1887,71 @@ function prettyModel(r) {
   if(mapped[0]==="GPT"&&tok[1]&&/^\d/.test(tok[1])) mapped.splice(0,2,`GPT-${tok[1]}`);
   return mapped.join(" ")+suf;
 }
+const OPENAI_RESPONSE_PRICING_USD_PER_MILLION = Object.freeze({
+  "openai/gpt-5.4-mini": Object.freeze({ input: 0.75, cachedInput: 0.075, output: 4.5 }),
+  "openai/gpt-5.4-nano": Object.freeze({ input: 0.2, cachedInput: 0.02, output: 1.25 }),
+});
+const PREFERRED_REASONING_SCATTER_BASE_MODELS = Object.freeze([
+  "openai/gpt-5.4-mini",
+  "openai/gpt-5.4-nano",
+]);
+function responseUsageObject(row) {
+  return row?.response_usage && typeof row.response_usage === "object" ? row.response_usage : null;
+}
+function finiteNonNegativeNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+}
+function responsePromptTokens(row) {
+  const usage = responseUsageObject(row);
+  return finiteNonNegativeNumber(usage?.prompt_tokens ?? usage?.input_tokens ?? row?.response_prompt_tokens);
+}
+function responseCompletionTokens(row) {
+  const usage = responseUsageObject(row);
+  return finiteNonNegativeNumber(usage?.completion_tokens ?? usage?.output_tokens ?? row?.response_completion_tokens);
+}
+function responseTotalTokens(row) {
+  const usage = responseUsageObject(row);
+  return finiteNonNegativeNumber(usage?.total_tokens ?? row?.response_total_tokens);
+}
+function responseReasoningTokens(row) {
+  const usage = responseUsageObject(row);
+  return finiteNonNegativeNumber(
+    usage?.completion_tokens_details?.reasoning_tokens
+      ?? usage?.output_tokens_details?.reasoning_tokens
+      ?? row?.response_reasoning_tokens
+  );
+}
+function responseCachedPromptTokens(row) {
+  const usage = responseUsageObject(row);
+  return finiteNonNegativeNumber(
+    usage?.prompt_tokens_details?.cached_tokens
+      ?? usage?.input_tokens_details?.cached_tokens
+      ?? row?.response_cached_prompt_tokens
+  );
+}
+function responseCostUsd(row) {
+  const usage = responseUsageObject(row);
+  const usageCost = Number(usage?.cost);
+  if (Number.isFinite(usageCost) && usageCost > 0) return usageCost;
+  const directCost = Number(row?.response_cost_usd);
+  if (Number.isFinite(directCost) && directCost > 0) return directCost;
+
+  const pricing = OPENAI_RESPONSE_PRICING_USD_PER_MILLION[baseModelId(row)];
+  if (!pricing) return 0;
+
+  const promptTokens = responsePromptTokens(row);
+  const cachedPromptTokens = Math.min(responseCachedPromptTokens(row), promptTokens);
+  const nonCachedPromptTokens = Math.max(promptTokens - cachedPromptTokens, 0);
+  const completionTokens = responseCompletionTokens(row);
+  if (promptTokens <= 0 && completionTokens <= 0) return 0;
+
+  return (
+    (nonCachedPromptTokens * pricing.input)
+    + (cachedPromptTokens * pricing.cachedInput)
+    + (completionTokens * pricing.output)
+  ) / 1_000_000;
+}
 function modelSeriesKey(r) {
   const org = normOrg(modelOrg(r));
   const baseRaw = String(rawModelName(r) || modelKey(r) || "").toLowerCase();
@@ -2334,11 +2399,11 @@ async function loadData() {
       const u = modelUsage.get(mk);
       const usage = r.response_usage;
       if (usage) {
-        u.prompt += (usage.prompt_tokens||0);
-        u.completion += (usage.completion_tokens||0);
-        u.total += (usage.total_tokens||0);
-        u.reasoning += (usage.completion_tokens_details?.reasoning_tokens||0);
-        u.cost += (usage.cost||0);
+        u.prompt += responsePromptTokens(r);
+        u.completion += responseCompletionTokens(r);
+        u.total += responseTotalTokens(r);
+        u.reasoning += responseReasoningTokens(r);
+        u.cost += responseCostUsd(r);
         u.latency += (r.response_latency_ms||0);
         u.count++;
       }
@@ -3206,7 +3271,7 @@ function selectReleaseScatterLabelPoints(points, maxLabels = 10) {
   return selected.slice(0, maxLabels);
 }
 
-function selectReasoningScatterLabelPoints(points, maxLabels = 9, metricKey = "avgReasoning") {
+function selectReasoningScatterLabelPoints(points, maxLabels = 9, metricKey = "avgReasoning", preferredModels = []) {
   const metricValue = p => Number(p?.[metricKey] || 0);
   const selected = [];
   const seen = new Set();
@@ -3222,6 +3287,12 @@ function selectReasoningScatterLabelPoints(points, maxLabels = 9, metricKey = "a
   add(points.slice().sort((a,b) => b.greenRate - a.greenRate || metricValue(a) - metricValue(b))[0]); // strongest
   add(points.slice().sort((a,b) => metricValue(b) - metricValue(a) || b.greenRate - a.greenRate)[0]); // highest x
   add(points.slice().sort((a,b) => metricValue(a) - metricValue(b) || b.greenRate - a.greenRate)[0]); // lowest x
+  preferredModels.forEach((baseModel) => {
+    const preferredPoint = points
+      .filter(p => String(p?.mk || "").replace(/@reasoning=[^@]+$/i, "") === baseModel)
+      .sort((a,b) => metricValue(b) - metricValue(a) || b.greenRate - a.greenRate)[0];
+    add(preferredPoint);
+  });
 
   // Add best model in each x-range quartile to spread labels across the axis.
   const byMetric = points.slice().sort((a,b) => metricValue(a) - metricValue(b));
@@ -3690,7 +3761,7 @@ function renderReasoningScatter(filtered) {
 
   // Dots + selective standout labels
   const circles = points.map(p => renderScatterCircle(p, "reasoningScatter")).join("");
-  const labelCandidates = mergePinnedScatterLabelPoints(points, selectReasoningScatterLabelPoints(points, 9, metricKey));
+  const labelCandidates = mergePinnedScatterLabelPoints(points, selectReasoningScatterLabelPoints(points, 9, metricKey, PREFERRED_REASONING_SCATTER_BASE_MODELS));
   const labelPlacements = placeLabelsGreedy(labelCandidates, {
     fontSize: 8.6, svgW: W, svgH: H, ml, mr, mt, mb,
     obstaclePoints: points, maxLabels: labelCandidates.length, dotRadius: 4, padding: 1.6,
@@ -4066,13 +4137,15 @@ function renderCompare(filtered) {
   const renderCard = (row, prefix) => {
     if(!row) return `<div class="response-card error"><p class="subtle">No model selected.</p></div>`;
     const cat=catKey(row), org=modelOrg(row);
-    const usage=row.response_usage;
     const latency=row.response_latency_ms;
     const metaBits=[];
-    if(usage) metaBits.push(`${fmtNum(usage.total_tokens||0)} tokens`);
-    if(usage?.cost) metaBits.push(`$${usage.cost.toFixed(4)}`);
+    const totalTokens = responseTotalTokens(row);
+    const costUsd = responseCostUsd(row);
+    const reasoningTokens = responseReasoningTokens(row);
+    if(totalTokens > 0) metaBits.push(`${fmtNum(totalTokens)} tokens`);
+    if(costUsd > 0) metaBits.push(`$${costUsd.toFixed(4)}`);
     if(latency) metaBits.push(`${(latency/1000).toFixed(1)}s`);
-    if(usage?.completion_tokens_details?.reasoning_tokens) metaBits.push(`${fmtNum(usage.completion_tokens_details.reasoning_tokens)} reasoning`);
+    if(reasoningTokens > 0) metaBits.push(`${fmtNum(reasoningTokens)} reasoning`);
     return `<article class="response-card ${CATEGORY_META[cat].colorClass}">
       <div class="response-head">
         <h4 class="title"><span class="org-dot" style="background:${orgColor(org)};"></span>${esc(prefix)}${esc(prettyModel(row))}</h4>

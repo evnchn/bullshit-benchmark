@@ -1614,6 +1614,67 @@ def _coerce_bool(value: Any) -> bool | None:
     return None
 
 
+OPENAI_MODEL_PRICING_USD_PER_MILLION: dict[str, dict[str, float]] = {
+    "gpt-5.4-mini": {
+        "input": 0.75,
+        "cached_input": 0.075,
+        "output": 4.50,
+    },
+    "gpt-5.4-nano": {
+        "input": 0.20,
+        "cached_input": 0.02,
+        "output": 1.25,
+    },
+}
+
+
+def _base_model_id(model: Any) -> str:
+    return re.sub(r"@reasoning=[^@]+$", "", str(model or "").strip())
+
+
+def _openai_pricing_for_model(model: Any) -> dict[str, float] | None:
+    model_id = _openai_model_id(_base_model_id(model))
+    if not model_id:
+        return None
+    return OPENAI_MODEL_PRICING_USD_PER_MILLION.get(model_id)
+
+
+def estimate_openai_response_cost_usd(model: Any, usage: Any) -> float | None:
+    pricing = _openai_pricing_for_model(model)
+    usage_obj = usage if isinstance(usage, dict) else {}
+    if not pricing or not usage_obj:
+        return None
+
+    prompt_tokens = _coerce_int(usage_obj.get("prompt_tokens"))
+    if prompt_tokens is None:
+        prompt_tokens = _coerce_int(usage_obj.get("input_tokens"))
+    completion_tokens = _coerce_int(usage_obj.get("completion_tokens"))
+    if completion_tokens is None:
+        completion_tokens = _coerce_int(usage_obj.get("output_tokens"))
+
+    prompt_details = (
+        usage_obj.get("prompt_tokens_details")
+        if isinstance(usage_obj.get("prompt_tokens_details"), dict)
+        else (
+            usage_obj.get("input_tokens_details")
+            if isinstance(usage_obj.get("input_tokens_details"), dict)
+            else {}
+        )
+    )
+    cached_prompt_tokens = _coerce_int(prompt_details.get("cached_tokens")) or 0
+
+    if prompt_tokens is None and completion_tokens is None:
+        return None
+
+    non_cached_prompt_tokens = max((prompt_tokens or 0) - cached_prompt_tokens, 0)
+    cost = (
+        (non_cached_prompt_tokens * pricing["input"])
+        + (cached_prompt_tokens * pricing["cached_input"])
+        + ((completion_tokens or 0) * pricing["output"])
+    ) / 1_000_000.0
+    return round(cost, 10)
+
+
 def extract_response_usage_metrics(usage: Any) -> dict[str, Any]:
     usage_obj = usage if isinstance(usage, dict) else {}
     prompt_tokens_raw = usage_obj.get("prompt_tokens")
@@ -1673,7 +1734,16 @@ def extract_response_usage_metrics(usage: Any) -> dict[str, Any]:
 
 
 def enrich_collect_record_metrics(record: dict[str, Any]) -> dict[str, Any]:
-    usage_metrics = extract_response_usage_metrics(record.get("response_usage", {}))
+    usage_obj = record.get("response_usage", {})
+    usage_metrics = extract_response_usage_metrics(usage_obj)
+    if usage_metrics.get("response_cost_usd") is None:
+        estimated_cost = estimate_openai_response_cost_usd(record.get("model"), usage_obj)
+        if estimated_cost is not None:
+            usage_metrics["response_cost_usd"] = estimated_cost
+            if isinstance(usage_obj, dict) and usage_obj.get("cost") is None:
+                patched_usage = dict(usage_obj)
+                patched_usage["cost"] = estimated_cost
+                record["response_usage"] = patched_usage
     record.update(usage_metrics)
 
     response_text = record.get("response_text", "")
