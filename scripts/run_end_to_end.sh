@@ -280,7 +280,7 @@ echo "Primary grade dir: ${PRIMARY_GRADE_DIR}"
 if [[ "${WITH_ADDITIONAL_JUDGES}" -eq 1 ]]; then
   echo "Viewer data: ${ROOT_DIR}/${VIEWER_OUTPUT_DIR}"
   echo "Open UI after serving:"
-  echo "  /viewer/index.html"
+  echo "  /viewer/index.v2.html"
 else
   echo "To run additional judges later, reuse this run with:"
   echo "  ./scripts/run_end_to_end.sh --config ${CONFIG_PATH} --output-dir ${OUTPUT_DIR} --run-id ${RUN_ID} --panel-id ${PANEL_ID} --skip-collect --skip-primary-judge --with-additional-judges"

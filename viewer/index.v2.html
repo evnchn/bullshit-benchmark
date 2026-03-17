@@ -307,7 +307,8 @@
 
     /* Sticky domain bar */
     .domain-bar {
-      position: sticky; top: var(--hero-pin-offset); z-index: 95;
+      position: relative;
+      z-index: 1;
       background: var(--panel);
       border: 1px solid var(--line);
       border-radius: var(--radius);
@@ -315,6 +316,11 @@
       padding: 12px 14px;
       display: grid;
       gap: 10px;
+    }
+    .domain-bar.is-pinned {
+      position: sticky;
+      top: var(--hero-pin-offset);
+      z-index: 95;
     }
     .domain-bar-top {
       display: flex;
@@ -374,6 +380,52 @@
       background: var(--panel-alt);
       border-color: #7f9087;
       color: var(--ink);
+    }
+    .domain-bar-pin-toggle {
+      appearance: none;
+      border: 1px solid transparent;
+      background: transparent;
+      color: #455650;
+      border-radius: 999px;
+      padding: 0;
+      width: 30px;
+      height: 30px;
+      min-width: 30px;
+      min-height: 30px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      opacity: 0.7;
+      transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease, opacity 140ms ease, color 140ms ease;
+    }
+    .domain-bar-pin-toggle:hover {
+      opacity: 1;
+      background: #ebe7de;
+      border-color: var(--line);
+      color: #233730;
+    }
+    .domain-bar-pin-toggle:focus-visible {
+      outline: 2px solid rgba(29, 91, 80, 0.3);
+      outline-offset: 2px;
+      opacity: 1;
+    }
+    .domain-bar-pin-toggle.is-active {
+      opacity: 1;
+      background: #dfe8e3;
+      border-color: #7f9087;
+      color: #17332c;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.35);
+    }
+    .domain-bar-pin-toggle svg {
+      width: 13px;
+      height: 13px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.7;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      flex: 0 0 auto;
     }
     .domain-bar-filters {
       display: none;
@@ -1150,7 +1202,8 @@
       .hero-title-row { gap: 8px; }
       .hero-version-inline { width: 100%; }
       .hero-version-inline select { width: min(180px, 100%); }
-      .domain-bar { padding: 10px 12px; top: var(--hero-pin-offset); }
+      .domain-bar { padding: 10px 12px; }
+      .domain-bar.is-pinned { top: var(--hero-pin-offset); }
       .panel { padding: 12px; }
       .tech-bar-row { grid-template-columns: 150px 1fr 44px 18px; gap: 5px; }
       .tech-bar-label { font-size: 0.78rem; }
@@ -1205,6 +1258,12 @@
         <span class="domain-bar-sep"></span>
         <span class="filter-count" id="domainBarSummary">Overall</span>
         <button type="button" id="domainBarFilterToggle" class="domain-bar-filter-toggle alt" aria-controls="filtersCollapsible" aria-expanded="false">Show Filters</button>
+        <button type="button" id="domainBarPinToggle" class="domain-bar-pin-toggle" aria-pressed="false" aria-label="Pin Domain Scope banner to top" title="Pin Domain Scope banner to top">
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M10.5 2.5 13 5l-3 .8-.9 3.9-.8-3.1-3.1-.8 2.5-2.5"></path>
+            <path d="M8 9.5v4"></path>
+          </svg>
+        </button>
       </div>
       <details id="filtersCollapsible" class="domain-bar-filters">
         <summary>Filters</summary>
@@ -1717,6 +1776,7 @@ const S = {
   reasoningScatterMode: "tokens",
   topVariantsOnly: false,
   heroPinned: false,
+  domainPinned: false,
   drilldown: null, lbSort: { key: "greenRate", direction: "desc" },
   tokenSort: "total",
   techniqueSeed: Math.floor(Math.random() * 1e9),
@@ -1774,6 +1834,18 @@ function buildLogTicks(minValue, maxValue) {
   }
   if (!ticks.length) return [minValue, maxValue].filter((v, idx, arr) => arr.indexOf(v) === idx);
   return ticks;
+}
+function buildDisplayLogTicks(minValue, maxValue, maxTicks = 8) {
+  const ticks = buildLogTicks(minValue, maxValue);
+  if (ticks.length <= maxTicks) return ticks;
+  const powerTicks = ticks.filter(t => {
+    const log = Math.log10(t);
+    return Math.abs(log - Math.round(log)) < 1e-9;
+  });
+  const condensed = [...new Set([...powerTicks, ticks[ticks.length - 1]])].sort((a, b) => a - b);
+  if (condensed.length >= 2 && condensed.length <= maxTicks) return condensed;
+  const step = Math.max(1, Math.ceil(ticks.length / maxTicks));
+  return ticks.filter((_, idx) => idx % step === 0 || idx === ticks.length - 1);
 }
 
 function normOrg(v) {
@@ -1895,6 +1967,7 @@ function applyBenchmarkPresentation() {
   if (domainSection) domainSection.classList.toggle("hidden-block", !cfg.showDomainHeatmap);
   if (domainInsightsSection) domainInsightsSection.classList.toggle("hidden-block", !cfg.showDomainInsights);
   syncHeroPinState();
+  syncDomainPinState();
 }
 
 let heroPinResizeObserver = null;
@@ -1917,6 +1990,19 @@ function syncHeroPinState() {
     toggle.setAttribute("aria-label", nextLabel);
   }
   updateHeroPinOffset();
+}
+
+function syncDomainPinState() {
+  const domainBar = document.getElementById("domainBar");
+  const toggle = document.getElementById("domainBarPinToggle");
+  if (domainBar) domainBar.classList.toggle("is-pinned", !!S.domainPinned);
+  if (toggle) {
+    toggle.classList.toggle("is-active", !!S.domainPinned);
+    toggle.setAttribute("aria-pressed", S.domainPinned ? "true" : "false");
+    const nextLabel = S.domainPinned ? "Unpin Domain Scope banner from top" : "Pin Domain Scope banner to top";
+    toggle.setAttribute("title", nextLabel);
+    toggle.setAttribute("aria-label", nextLabel);
+  }
 }
 
 function observeHeroPinPanel() {
@@ -3510,17 +3596,17 @@ function renderReasoningScatter(filtered) {
   const modeCfg = mode === "cost"
     ? {
         headingSuffix: "Does Higher Cost Help?",
-        subtitle: "Average cost per response vs. green rate. Higher cost can reflect more compute and longer reasoning.",
+        subtitle: "Average cost per response vs. green rate. Higher cost can reflect more compute and longer reasoning. The x-axis is log scale.",
         metricKey: "avgCost",
-        xAxisLabel: "Average Cost per Response (USD)",
+        xAxisLabel: "Average Cost per Response (USD, log scale)",
         tooltipLabel: "Avg Cost",
         emptyText: "No cost data available for the current filters.",
       }
     : {
         headingSuffix: "Does Thinking Harder Help?",
-        subtitle: 'Average reasoning tokens used vs. green rate. More reasoning tokens = model "thinking harder".',
+        subtitle: 'Average reasoning tokens used vs. green rate. More reasoning tokens = model "thinking harder". The x-axis is log scale.',
         metricKey: "avgReasoning",
-        xAxisLabel: "Average Reasoning Tokens per Response",
+        xAxisLabel: "Average Reasoning Tokens per Response (log scale)",
         tooltipLabel: "Avg Reasoning Tokens",
         emptyText: "No reasoning token data available for the current filters.",
       };
@@ -3565,15 +3651,18 @@ function renderReasoningScatter(filtered) {
 
   const W = 600, H = 420, ml = 70, mr = 30, mt = 20, mb = 50;
   const pw = W - ml - mr, ph = H - mt - mb;
-  const maxMetric = Math.max(...points.map(p => Number(p[metricKey]) || 0));
-  const xStep = niceTickStep(maxMetric * 1.05, 7);
-  const maxX = Math.max(xStep * 2, Math.ceil((maxMetric * 1.05) / xStep) * xStep);
-  const xFor = v => ml + ((Number(v) || 0) / maxX) * pw;
+  const metricValues = points.map(p => Number(p[metricKey]) || 0).filter(v => v > 0);
+  const minMetric = Math.min(...metricValues);
+  const maxMetric = Math.max(...metricValues);
+  const minX = Math.max(minMetric * 0.85, minMetric / 1.5, 1e-9);
+  const maxX = Math.max(maxMetric * 1.15, minX * 1.2);
+  const logMin = Math.log10(minX);
+  const logMax = Math.log10(maxX);
+  const xFor = v => ml + ((Math.log10(Math.max(Number(v) || minX, minX)) - logMin) / Math.max(1e-9, logMax - logMin)) * pw;
   const yFor = v => mt + ((100 - v) / 100) * ph;
 
   const yTicks = [0, 20, 40, 60, 80, 100];
-  const xTicks = [];
-  for (let t = 0; t <= maxX + xStep * 0.001; t += xStep) xTicks.push(t);
+  const xTicks = buildDisplayLogTicks(minX, maxX, mode === "cost" ? 7 : 8);
 
   const gridLines = yTicks.map(t => `<line x1="${ml}" y1="${yFor(t).toFixed(1)}" x2="${W-mr}" y2="${yFor(t).toFixed(1)}" stroke="#d8e2dd" stroke-width="1"/><text x="${ml-8}" y="${(yFor(t)+4).toFixed(1)}" text-anchor="end" fill="#586d66" font-size="11">${t}%</text>`).join("");
   const xGridLines = xTicks.map(t => `<line x1="${xFor(t).toFixed(1)}" y1="${mt}" x2="${xFor(t).toFixed(1)}" y2="${H-mb}" stroke="#edf2ef" stroke-width="1"/><text x="${xFor(t).toFixed(1)}" y="${H-mb+16}" text-anchor="middle" fill="#586d66" font-size="10">${esc(fmtAxisX(t))}</text>`).join("");
@@ -3581,7 +3670,7 @@ function renderReasoningScatter(filtered) {
   // Trend line
   let trendHtml = "";
   if (points.length >= 3) {
-    const xs = points.map(p => Number(p[metricKey]) || 0);
+    const xs = points.map(p => Math.log10(Math.max(Number(p[metricKey]) || minX, minX)));
     const ys = points.map(p => p.greenRate);
     const mx = xs.reduce((s,v) => s+v, 0) / xs.length;
     const my = ys.reduce((s,v) => s+v, 0) / ys.length;
@@ -3592,7 +3681,7 @@ function renderReasoningScatter(filtered) {
       const x1 = Math.min(...xs), x2 = Math.max(...xs);
       const y1 = Math.max(0, Math.min(100, slope * x1 + intercept));
       const y2 = Math.max(0, Math.min(100, slope * x2 + intercept));
-      trendHtml = `<line x1="${xFor(x1).toFixed(1)}" y1="${yFor(y1).toFixed(1)}" x2="${xFor(x2).toFixed(1)}" y2="${yFor(y2).toFixed(1)}" stroke="#5f6f6a" stroke-opacity="0.4" stroke-width="1.4" stroke-dasharray="5 4"/>`;
+      trendHtml = `<line x1="${xFor(10 ** x1).toFixed(1)}" y1="${yFor(y1).toFixed(1)}" x2="${xFor(10 ** x2).toFixed(1)}" y2="${yFor(y2).toFixed(1)}" stroke="#5f6f6a" stroke-opacity="0.4" stroke-width="1.4" stroke-dasharray="5 4"/>`;
     }
   }
 
@@ -4109,6 +4198,13 @@ function bindEvents() {
       syncHeroPinState();
     });
   }
+  const domainBarPinToggle = document.getElementById("domainBarPinToggle");
+  if (domainBarPinToggle) {
+    domainBarPinToggle.addEventListener("click", () => {
+      S.domainPinned = !S.domainPinned;
+      syncDomainPinState();
+    });
+  }
   window.addEventListener("resize", updateHeroPinOffset);
 
   // Filters
@@ -4301,6 +4397,7 @@ function init() {
   bindEvents();
   observeHeroPinPanel();
   syncHeroPinState();
+  syncDomainPinState();
   loadData().then(()=>renderHeroBadges());
 }
 init();

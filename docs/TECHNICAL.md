@@ -35,7 +35,7 @@ Serve locally after publish:
 ./scripts/run_end_to_end.sh --with-additional-judges --serve --port 8877
 ```
 
-Then open `http://localhost:8877/viewer/index.html`.
+Then open `http://localhost:8877/viewer/index.v2.html`.
 
 ### Grade Panel Policy
 
@@ -68,9 +68,8 @@ Use this checklist before pushing to GitHub/GitHub Pages:
    - source: `drafts/new-questions.md`
    - builder: `scripts/build_questions_v2_from_draft.py`
 4. Publish datasets only via `scripts/publish_latest_to_viewer.sh` (or `run_end_to_end.sh` wrapper) so artifact normalization stays consistent.
-5. Smoke-test both viewer entry points before publish:
-   - `viewer/index.html` (stable / version-switching)
-   - `viewer/index.v2.html` (v2-focused view)
+5. Smoke-test the published viewer before publish:
+   - `viewer/index.v2.html`
 
 ### High-Throughput Collection Knobs (30k+ Queries)
 
@@ -157,8 +156,8 @@ Publishing also exports:
 - `scripts/build_questions_v2_from_draft.py`: build `questions.v2.json` from markdown draft
 - `scripts/cleanup_generated_outputs.sh`: remove generated local artifacts
 - `scripts/model_launch_pipeline.py`: launch-date collection/judging pipeline
-- `viewer/index.html`: canonical interactive viewer
-- `viewer/index.v2.html`: v2-focused interactive viewer
+- `viewer/index.v2.html`: canonical interactive viewer
+- `viewer/index.html`: compatibility redirect to `viewer/index.v2.html`
 - `data/latest/*`: benchmark v1 published dataset
 - `data/v2/latest/*`: benchmark v2 published dataset
 - `runs/*`: local run history

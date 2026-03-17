@@ -1053,6 +1053,41 @@
       "run_average_stddev": null
     },
     {
+      "model": "openai/gpt-5.4-mini@reasoning=xhigh",
+      "count": 100,
+      "scored_count": 100,
+      "nonsense_count": 100,
+      "control_count": 0,
+      "score_0": 22,
+      "score_1": 47,
+      "score_2": 31,
+      "score_3": 0,
+      "avg_score": 1.0467,
+      "detection_rate_score_2": 0.31,
+      "full_engagement_rate_score_0": 0.22,
+      "control_correct_rate_score_3": null,
+      "error_count": 0,
+      "technique_breakdown": {
+        "authoritative_framing": 1.037,
+        "confident_extrapolation": 1.4166,
+        "cross_domain_stitching": 0.7333,
+        "fabricated_authority": 1.1515,
+        "false_granularity": 1.3334,
+        "misapplied_mechanism": 1.2308,
+        "nested_nonsense": 0.9048,
+        "plausible_nonexistent_framework": 0.8542,
+        "reified_metaphor": 1.4444,
+        "specificity_trap": 0.3333,
+        "sunk_cost_framing": 0.9524,
+        "temporal_category_error": 1.8333,
+        "wrong_unit_of_analysis": 0.9333
+      },
+      "run_average_scores": {
+        "1": 1.0467
+      },
+      "run_average_stddev": null
+    },
+    {
       "model": "anthropic/claude-3.7-sonnet@reasoning=default",
       "count": 100,
       "scored_count": 100,
@@ -1263,6 +1298,41 @@
       "run_average_stddev": null
     },
     {
+      "model": "openai/gpt-5.4-mini@reasoning=high",
+      "count": 100,
+      "scored_count": 100,
+      "nonsense_count": 100,
+      "control_count": 0,
+      "score_0": 31,
+      "score_1": 37,
+      "score_2": 32,
+      "score_3": 0,
+      "avg_score": 0.9833,
+      "detection_rate_score_2": 0.32,
+      "full_engagement_rate_score_0": 0.31,
+      "control_correct_rate_score_3": null,
+      "error_count": 0,
+      "technique_breakdown": {
+        "authoritative_framing": 0.8889,
+        "confident_extrapolation": 1.25,
+        "cross_domain_stitching": 0.9333,
+        "fabricated_authority": 1.303,
+        "false_granularity": 1.2222,
+        "misapplied_mechanism": 1.2308,
+        "nested_nonsense": 0.8095,
+        "plausible_nonexistent_framework": 0.75,
+        "reified_metaphor": 1.2222,
+        "specificity_trap": 0.0833,
+        "sunk_cost_framing": 0.9524,
+        "temporal_category_error": 1.3333,
+        "wrong_unit_of_analysis": 1.2667
+      },
+      "run_average_scores": {
+        "1": 0.9833
+      },
+      "run_average_stddev": null
+    },
+    {
       "model": "openai/gpt-5.2-codex@reasoning=high",
       "count": 100,
       "scored_count": 100,
@@ -1360,6 +1430,41 @@
         "specificity_trap": 0.5,
         "sunk_cost_framing": 0.6667,
         "temporal_category_error": 1.3889,
+        "wrong_unit_of_analysis": 1.0
+      },
+      "run_average_scores": {
+        "1": 0.9433
+      },
+      "run_average_stddev": null
+    },
+    {
+      "model": "openai/gpt-5.4-mini@reasoning=none",
+      "count": 100,
+      "scored_count": 100,
+      "nonsense_count": 100,
+      "control_count": 0,
+      "score_0": 32,
+      "score_1": 36,
+      "score_2": 32,
+      "score_3": 0,
+      "avg_score": 0.9433,
+      "detection_rate_score_2": 0.32,
+      "full_engagement_rate_score_0": 0.32,
+      "control_correct_rate_score_3": null,
+      "error_count": 0,
+      "technique_breakdown": {
+        "authoritative_framing": 0.7778,
+        "confident_extrapolation": 0.75,
+        "cross_domain_stitching": 0.8667,
+        "fabricated_authority": 1.2121,
+        "false_granularity": 1.5556,
+        "misapplied_mechanism": 1.2564,
+        "nested_nonsense": 0.9524,
+        "plausible_nonexistent_framework": 0.4792,
+        "reified_metaphor": 1.3333,
+        "specificity_trap": 0.1667,
+        "sunk_cost_framing": 1.2857,
+        "temporal_category_error": 1.2222,
         "wrong_unit_of_analysis": 1.0
       },
       "run_average_scores": {
@@ -2208,6 +2313,76 @@
       "run_average_stddev": null
     },
     {
+      "model": "openai/gpt-5.4-nano@reasoning=high",
+      "count": 100,
+      "scored_count": 100,
+      "nonsense_count": 100,
+      "control_count": 0,
+      "score_0": 56,
+      "score_1": 30,
+      "score_2": 14,
+      "score_3": 0,
+      "avg_score": 0.5233,
+      "detection_rate_score_2": 0.14,
+      "full_engagement_rate_score_0": 0.56,
+      "control_correct_rate_score_3": null,
+      "error_count": 0,
+      "technique_breakdown": {
+        "authoritative_framing": 0.5926,
+        "confident_extrapolation": 0.3333,
+        "cross_domain_stitching": 0.4667,
+        "fabricated_authority": 0.3333,
+        "false_granularity": 0.7222,
+        "misapplied_mechanism": 0.9487,
+        "nested_nonsense": 0.1429,
+        "plausible_nonexistent_framework": 0.25,
+        "reified_metaphor": 1.4445,
+        "specificity_trap": 0.2917,
+        "sunk_cost_framing": 0.381,
+        "temporal_category_error": 1.2778,
+        "wrong_unit_of_analysis": 0.2
+      },
+      "run_average_scores": {
+        "1": 0.5233
+      },
+      "run_average_stddev": null
+    },
+    {
+      "model": "openai/gpt-5.4-nano@reasoning=none",
+      "count": 100,
+      "scored_count": 100,
+      "nonsense_count": 100,
+      "control_count": 0,
+      "score_0": 61,
+      "score_1": 26,
+      "score_2": 13,
+      "score_3": 0,
+      "avg_score": 0.4933,
+      "detection_rate_score_2": 0.13,
+      "full_engagement_rate_score_0": 0.61,
+      "control_correct_rate_score_3": null,
+      "error_count": 0,
+      "technique_breakdown": {
+        "authoritative_framing": 0.5556,
+        "confident_extrapolation": 0.1666,
+        "cross_domain_stitching": 0.2,
+        "fabricated_authority": 0.3939,
+        "false_granularity": 0.7222,
+        "misapplied_mechanism": 0.9231,
+        "nested_nonsense": 0.3809,
+        "plausible_nonexistent_framework": 0.1875,
+        "reified_metaphor": 1.5556,
+        "specificity_trap": 0.0833,
+        "sunk_cost_framing": 0.4762,
+        "temporal_category_error": 1.1667,
+        "wrong_unit_of_analysis": 0.1333
+      },
+      "run_average_scores": {
+        "1": 0.4933
+      },
+      "run_average_stddev": null
+    },
+    {
       "model": "openai/gpt-4o-2024-08-06@reasoning=default",
       "count": 100,
       "scored_count": 100,
@@ -2379,6 +2554,41 @@
       },
       "run_average_scores": {
         "1": 0.4333
+      },
+      "run_average_stddev": null
+    },
+    {
+      "model": "openai/gpt-5.4-nano@reasoning=xhigh",
+      "count": 100,
+      "scored_count": 100,
+      "nonsense_count": 100,
+      "control_count": 0,
+      "score_0": 70,
+      "score_1": 20,
+      "score_2": 10,
+      "score_3": 0,
+      "avg_score": 0.4167,
+      "detection_rate_score_2": 0.1,
+      "full_engagement_rate_score_0": 0.7,
+      "control_correct_rate_score_3": null,
+      "error_count": 0,
+      "technique_breakdown": {
+        "authoritative_framing": 0.1852,
+        "confident_extrapolation": 0.3333,
+        "cross_domain_stitching": 0.1333,
+        "fabricated_authority": 0.4242,
+        "false_granularity": 0.6667,
+        "misapplied_mechanism": 0.9231,
+        "nested_nonsense": 0.0,
+        "plausible_nonexistent_framework": 0.1667,
+        "reified_metaphor": 1.1111,
+        "specificity_trap": 0.125,
+        "sunk_cost_framing": 0.0952,
+        "temporal_category_error": 1.3889,
+        "wrong_unit_of_analysis": 0.2667
+      },
+      "run_average_scores": {
+        "1": 0.4167
       },
       "run_average_stddev": null
     },
@@ -3088,29 +3298,29 @@
       {
         "judge_i": 1,
         "judge_j": 2,
-        "compared_rows": 8800,
-        "agreements": 7115,
-        "agreement_rate": 0.808523
+        "compared_rows": 9400,
+        "agreements": 7561,
+        "agreement_rate": 0.804362
       },
       {
         "judge_i": 1,
         "judge_j": 3,
-        "compared_rows": 8800,
-        "agreements": 6977,
-        "agreement_rate": 0.792841
+        "compared_rows": 9400,
+        "agreements": 7421,
+        "agreement_rate": 0.789468
       },
       {
         "judge_i": 2,
         "judge_j": 3,
-        "compared_rows": 8800,
-        "agreements": 6872,
-        "agreement_rate": 0.780909
+        "compared_rows": 9400,
+        "agreements": 7287,
+        "agreement_rate": 0.775213
       }
     ],
-    "average_pairwise_agreement": 0.794091,
-    "krippendorff_alpha_ordinal": 0.791372
+    "average_pairwise_agreement": 0.789681,
+    "krippendorff_alpha_ordinal": 0.784157
   },
-  "total_records": 8800,
+  "total_records": 9400,
   "total_error_records": 0,
-  "total_scored_records": 8800
+  "total_scored_records": 9400
 }
