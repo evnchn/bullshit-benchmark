@@ -1457,9 +1457,9 @@
             <span class="score-chip"><span class="dot score1"></span>Partial Challenge</span>
             <span class="score-chip"><span class="dot score0"></span>Accepted Nonsense</span>
           </div>
-          <label class="leaderboard-window-inline" title="Filters the leaderboard table below">
-            <span>Leaderboard</span>
-            <select id="leaderboardRecentSelect" aria-label="Leaderboard table recent-addition window">
+          <label class="leaderboard-window-inline" title="Show only models added in the last N days">
+            <span>New Models</span>
+            <select id="leaderboardRecentSelect" aria-label="New models window">
               <option value="all">All</option>
               <option value="7">7d</option>
               <option value="30">30d</option>
@@ -4307,6 +4307,10 @@ function isLeaderboardRecentRow(row, maxAgeDays = leaderboardRecentWindowDays())
   const ageDays = modelAgeDaysForRow(row);
   return maxAgeDays !== null && ageDays !== null && ageDays <= maxAgeDays;
 }
+function recentModelWindowRows(rows, maxAgeDays = leaderboardRecentWindowDays()) {
+  if (maxAgeDays === null) return rows;
+  return rows.filter(r => isLeaderboardRecentRow(r, maxAgeDays));
+}
 function summarizeRows(rows) {
   const c = aggCounts(rows), scored = c.green+c.amber+c.red;
   return { greenRate: pct(c.green, scored) };
@@ -4330,15 +4334,14 @@ function launchChartModelLabel(label) {
 
 // ====== RENDER: Leaderboard ======
 function renderLeaderboard(filtered) {
-  const windowDays = leaderboardRecentWindowDays();
-  const leaderboardRows = windowDays === null ? filtered : filtered.filter(r => isLeaderboardRecentRow(r, windowDays));
   const recentSelect = document.getElementById("leaderboardRecentSelect");
   if (recentSelect) {
     const nextValue = String(S.leaderboardRecentWindow || LEADERBOARD_WINDOW_DEFAULT);
     if (recentSelect.value !== nextValue) recentSelect.value = nextValue;
   }
 
-  const byModel = groupBy(leaderboardRows, modelKey);
+  const windowDays = leaderboardRecentWindowDays();
+  const byModel = groupBy(filtered, modelKey);
   const rows = [...byModel.entries()].map(([mk,mRows])=>{
     const sample=mRows[0]||{};
     const s=summarize(mRows);
@@ -4531,7 +4534,8 @@ function renderAll() {
   if(!S.rows.length) return;
   const cfg = currentBenchmarkConfig();
   const filtered = applyFilters(S.rows);
-  const modelChartRows = modelChartRowsForFocus(filtered);
+  const recentModelRows = recentModelWindowRows(filtered);
+  const modelChartRows = modelChartRowsForFocus(recentModelRows);
   S.filteredRows = filtered;
   if (cfg.showDomainGroup) renderDomainBar();
   const el = document.getElementById("dataState");
@@ -4539,7 +4543,7 @@ function renderAll() {
   el.textContent = `Showing ${filtered.length} of ${S.rows.length} rows${variantNote}.`;
   refreshTopVariantToggle();
   renderKpis(filtered);
-  renderOrgGuide(filtered);
+  renderOrgGuide(recentModelRows);
   renderModelBars(modelChartRows);
   renderDrilldown(modelChartRows);
   if (cfg.showDomainHeatmap) renderDomainHeatmap(filtered);
@@ -4549,7 +4553,7 @@ function renderAll() {
   renderAllModelsScatter(filtered);
   renderReasoningScatter(filtered);
   renderSizeScatters(filtered);
-  renderLeaderboard(filtered);
+  renderLeaderboard(recentModelRows);
   renderCompare(filtered);
 }
 
