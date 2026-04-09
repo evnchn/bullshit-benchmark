@@ -2044,6 +2044,10 @@ const OPENAI_RESPONSE_PRICING_USD_PER_MILLION = Object.freeze({
   "openai/gpt-5.4-mini": Object.freeze({ input: 0.75, cachedInput: 0.075, output: 4.5 }),
   "openai/gpt-5.4-nano": Object.freeze({ input: 0.2, cachedInput: 0.02, output: 1.25 }),
 });
+const PREFERRED_LAUNCH_CHART_BASE_MODELS = Object.freeze([
+  "openai/gpt-5.4",
+  "google/gemini-3.1-pro-preview",
+]);
 const PREFERRED_REASONING_SCATTER_BASE_MODELS = Object.freeze([
   "openai/gpt-5.4-mini",
   "openai/gpt-5.4-nano",
@@ -3198,6 +3202,12 @@ function placeLabelsGreedy(points, opts = {}) {
   const priorityFn = typeof opts.priorityFn === "function"
     ? opts.priorityFn
     : (point => Number(point?.greenRate) || 0);
+  const labelFormatter = typeof opts.labelFormatter === "function"
+    ? opts.labelFormatter
+    : (point => launchChartModelLabel(point?.label));
+  const pinnedLabelFormatter = typeof opts.pinnedLabelFormatter === "function"
+    ? opts.pinnedLabelFormatter
+    : (point => String(point?.label || labelFormatter(point)));
 
   // Sort by configured priority descending (most important first)
   const sorted = points.slice().sort((a,b) => {
@@ -3291,7 +3301,8 @@ function placeLabelsGreedy(points, opts = {}) {
   let autoLabelsPlaced = 0;
   sorted.forEach(pt => {
     if (!pt?._pinnedLabel && autoLabelsPlaced >= maxLabels) return;
-    const labelW = pt.label.length * charW + 2;
+    const labelText = String(pt._pinnedLabel ? pinnedLabelFormatter(pt) : labelFormatter(pt) || "");
+    const labelW = labelText.length * charW + 2;
     const labelH = lineH;
     const cx = pt._cx, cy = pt._cy;
     const di = dotIdx.get(pt) ?? -1;
@@ -3321,6 +3332,15 @@ function placeLabelsGreedy(points, opts = {}) {
     ];
 
     if (pt._pinnedLabel) {
+      for (const o of offsets) {
+        const box = { x: cx + o.dx, y: cy + o.dy, w: labelW, h: labelH };
+        if (overlaps(box, di)) continue;
+        placed.push(box);
+        const anchor = o.dx < -labelW/2 ? "end" : o.dx > 0 ? "start" : "middle";
+        const textX = anchor === "end" ? box.x + box.w : anchor === "middle" ? box.x + box.w/2 : box.x;
+        result.push({ point: pt, x: textX, y: box.y + labelH - 2, anchor });
+        return;
+      }
       for (const o of offsets) {
         const box = { x: cx + o.dx, y: cy + o.dy, w: labelW, h: labelH };
         if (!boxWithinPlot(box)) continue;
@@ -3413,6 +3433,17 @@ function annotateScatterPoints(chartId, points) {
   });
 }
 
+function primeDefaultScatterSelections(chartId, points, preferredModels = []) {
+  const selected = selectedScatterPointSet(chartId);
+  if (selected.size || !preferredModels.length) return;
+  preferredModels.forEach((baseModel) => {
+    const preferredPoint = points
+      .filter(point => scatterBaseModelKey(point) === baseModel)
+      .sort((a,b) => b.greenRate - a.greenRate || b.launchDate.getTime() - a.launchDate.getTime())[0];
+    if (preferredPoint) selected.add(scatterPointKey(preferredPoint));
+  });
+}
+
 function mergePinnedScatterLabelPoints(points, autoCandidates) {
   const merged = [];
   const seen = new Set();
@@ -3432,6 +3463,10 @@ function mergePinnedScatterLabelPoints(points, autoCandidates) {
 
 function scatterLabelPriority(point) {
   return (point?._pinnedLabel ? 100000 : 0) + (Number(point?.greenRate) || 0);
+}
+
+function scatterBaseModelKey(point) {
+  return String(point?.mk || point?.model || "").replace(/@reasoning=[^@]+$/i, "");
 }
 
 function scatterToggleAriaLabel(point) {
@@ -3493,6 +3528,47 @@ function selectReleaseScatterLabelPoints(points, maxLabels = 10) {
   points.slice().sort((a,b) => b.greenRate - a.greenRate || b.launchDate.getTime() - a.launchDate.getTime()).slice(0, 4).forEach(add);
   points.slice().sort((a,b) => b.launchDate.getTime() - a.launchDate.getTime() || b.greenRate - a.greenRate).slice(0, 3).forEach(add);
   return selected.slice(0, maxLabels);
+}
+
+function selectLaunchScatterLabelPoints(points, maxLabels = 12, preferredModels = []) {
+  const selected = [];
+  const seen = new Set();
+  const add = p => {
+    if (!p) return;
+    const k = scatterPointKey(p);
+    if (seen.has(k)) return;
+    seen.add(k);
+    selected.push(p);
+  };
+
+  preferredModels.forEach((baseModel) => {
+    const preferredPoint = points
+      .filter(p => scatterBaseModelKey(p) === baseModel)
+      .sort((a,b) => b.greenRate - a.greenRate || b.launchDate.getTime() - a.launchDate.getTime())[0];
+    add(preferredPoint);
+  });
+
+  const byOrg = groupBy(points, p => normOrg(p.org));
+  [...byOrg.values()].forEach(orgPts => {
+    add(orgPts.slice().sort((a,b) => b.greenRate - a.greenRate || b.launchDate.getTime() - a.launchDate.getTime())[0]);
+    add(orgPts.slice().sort((a,b) => b.launchDate.getTime() - a.launchDate.getTime() || b.greenRate - a.greenRate)[0]);
+  });
+
+  const byDate = points.slice().sort((a,b) => a.launchDate.getTime() - b.launchDate.getTime());
+  const binCount = Math.min(5, byDate.length);
+  for (let i = 0; i < binCount; i++) {
+    const start = Math.floor((i * byDate.length) / binCount);
+    const end = Math.floor(((i + 1) * byDate.length) / binCount);
+    const bin = byDate.slice(start, Math.max(start + 1, end));
+    add(bin.slice().sort((a,b) => b.greenRate - a.greenRate || b.launchDate.getTime() - a.launchDate.getTime())[0]);
+  }
+
+  points.slice().sort((a,b) => b.greenRate - a.greenRate || b.launchDate.getTime() - a.launchDate.getTime()).slice(0, maxLabels).forEach(add);
+  return selected.slice(0, maxLabels);
+}
+
+function launchScatterLabelPriority(point) {
+  return scatterLabelPriority(point) + (PREFERRED_LAUNCH_CHART_BASE_MODELS.includes(scatterBaseModelKey(point)) ? 5000 : 0);
 }
 
 function selectReasoningScatterLabelPoints(points, maxLabels = 9, metricKey = "avgReasoning", preferredModels = []) {
@@ -3673,7 +3749,7 @@ function renderLaunchAllOrgs(filtered) {
   const RELEASE_WINDOW_DAYS = 0;
   const RELEASE_WINDOW_MS = RELEASE_WINDOW_DAYS * 86400000;
   const byModel2 = groupBy(filtered, modelKey);
-  const rawPoints = [...byModel2.entries()].map(([, modelRows]) => {
+  const rawPoints = [...byModel2.entries()].map(([mk, modelRows]) => {
     const sample = modelRows[0] || {};
     const org = normOrg(modelOrg(sample));
     const targetOrgs = new Set(["anthropic", "openai", "google"]);
@@ -3683,7 +3759,7 @@ function renderLaunchAllOrgs(filtered) {
     const launchDate = parseIsoDate(launch.launch_date);
     if (!launchDate) return null;
     const stats = summarizeRows(modelRows);
-    return { label: prettyModel(sample), org, launchDate, greenRate: stats.greenRate };
+    return { mk, label: prettyModel(sample), org, launchDate, greenRate: stats.greenRate };
   }).filter(Boolean);
 
   if (!rawPoints.length) {
@@ -3850,6 +3926,7 @@ function renderLaunchAllOrgs(filtered) {
 
   // Dots + labels
   points.forEach(p => { p._cx = xFor(p.launchDate.getTime()); p._cy = yFor(p.greenRate); });
+  primeDefaultScatterSelections("launchAllOrgs", points, PREFERRED_LAUNCH_CHART_BASE_MODELS);
   annotateScatterPoints("launchAllOrgs", points);
   const dots = points.map(p => renderScatterCircle(p, "launchAllOrgs", {
     radius: 5,
@@ -3867,10 +3944,16 @@ function renderLaunchAllOrgs(filtered) {
   // Label placement — exclude the last point per org (already labeled at line end)
   const lastPtSet = new Set([...lastPointPerOrg.values()]);
   const labelPoints = points.filter(p => p._pinnedLabel || !lastPtSet.has(p));
-  const labelPlacements = placeLabelsGreedy(labelPoints, {
+  const labelCandidates = mergePinnedScatterLabelPoints(
+    labelPoints,
+    selectLaunchScatterLabelPoints(labelPoints, 12, PREFERRED_LAUNCH_CHART_BASE_MODELS)
+  );
+  const labelPlacements = placeLabelsGreedy(labelCandidates, {
     fontSize: 10, svgW: W, svgH: H, ml, mr: mr + 120, mt, mb,
     lineSegments: allLineSegs, dotRadius: 6, padding: 3,
-    priorityFn: scatterLabelPriority,
+    priorityFn: launchScatterLabelPriority,
+    labelFormatter: point => launchChartModelLabel(point.label),
+    pinnedLabelFormatter: point => launchChartModelLabel(point.label),
   });
   const labelsHtml = labelPlacements.map(lp => renderScatterTextLabel(lp, "launchAllOrgs", {
     fontSize: "10",
@@ -3880,6 +3963,8 @@ function renderLaunchAllOrgs(filtered) {
     strokeWidth: "1.7",
     pinnedStrokeWidth: "2.1",
     opacity: "0.95",
+    labelFormatter: point => launchChartModelLabel(point.label),
+    pinnedLabelFormatter: point => launchChartModelLabel(point.label),
   })).join("");
 
   svg.innerHTML = `${gridY}${gridX}${lines}${dots}${labelsHtml}${orgEndLabels}
