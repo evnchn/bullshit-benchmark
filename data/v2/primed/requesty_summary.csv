@@ -1,0 +1,5 @@
+target,prompt,n,green,amber,red,green_rate,avg_score,target_cost,judge_cost,errors
+deepseek/deepseek-chat,baseline_empty,100,29,4,67,0.29,0.62,0.04993,0.34702,0
+deepseek/deepseek-chat,premise_check,100,100,0,0,1.0,2.0,0.02535,0.15078,0
+nebius/meta-llama/Llama-3.3-70B-Instruct,baseline_empty,100,35,4,61,0.35,0.74,0.02118,0.21672,0
+nebius/meta-llama/Llama-3.3-70B-Instruct,premise_check,100,100,0,0,1.0,2.0,0.01859,0.15436,0

@@ -1,0 +1,3 @@
+target,prompt,n,green,amber,red,green_rate,avg_score,judge_cost,errors
+llama33-70b,baseline_empty,100,31,7,62,0.31,0.69,0.22376,0
+llama33-70b,premise_check,100,98,1,1,0.98,1.97,0.15701,0

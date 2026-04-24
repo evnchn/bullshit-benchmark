@@ -1,0 +1,7 @@
+endpoint,target,prompt,n,green,amber,red,green_rate,avg_score
+requesty,deepseek/deepseek-chat,baseline_empty,100,29,4,67,0.29,0.62
+requesty,deepseek/deepseek-chat,premise_check,100,100,0,0,1.0,2.0
+requesty/nebius,meta-llama/Llama-3.3-70B-Instruct,baseline_empty,100,35,4,61,0.35,0.74
+requesty/nebius,meta-llama/Llama-3.3-70B-Instruct,premise_check,100,100,0,0,1.0,2.0
+hkust_openwebui,llama33-70b,baseline_empty,100,31,7,62,0.31,0.69
+hkust_openwebui,llama33-70b,premise_check,100,98,1,1,0.98,1.97
