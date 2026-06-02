@@ -2308,9 +2308,11 @@ function loadEmbeddedDataset(cfg) {
 }
 
 async function loadDatasetCandidate(source) {
-  // Fan out all metadata fetches in parallel. responses.jsonl (~99 MB of token/cost/latency
-  // detail) is held back: if aggregate.jsonl carries the rows for the initial render, we
-  // hydrate from it later without blocking first paint. Behavioural fallbacks preserved.
+  // Fire EVERY fetch (including the ~99 MB responses.jsonl) concurrently from the start so
+  // network time is shared. We only `await` the critical-path metadata before first paint
+  // and let responses.jsonl finish in the background, then replay the merge to fill
+  // token / cost / latency UI. Behavioural fallbacks for missing aggregate preserved.
+  const responsesTextPromise = fetchTextRequired(`${source.basePath}/responses.jsonl`);
   const [stats, manifest, aggText, panel, summary, recentAdditions, launchText, paramsText, gradeText] = await Promise.all([
     fetchJsonRequired(`${source.basePath}/collection_stats.json`),
     source.supportsManifest === false ? Promise.resolve(null) : fetchJsonOptional(`${source.basePath}/manifest.json`),
@@ -2329,12 +2331,12 @@ async function loadDatasetCandidate(source) {
   let responsesPromise = null;
 
   if (aggregateRows.length) {
-    // Aggregate is sufficient for first paint. Defer responses.jsonl to a background fetch
-    // that the caller awaits after the initial render to fill token/cost/latency UI.
-    responsesPromise = fetchTextRequired(`${source.basePath}/responses.jsonl`).then(parseJsonl);
+    // Aggregate is sufficient for first paint. responses.jsonl has been streaming since the
+    // top of this function; the caller awaits the parsed promise after the initial render.
+    responsesPromise = responsesTextPromise.then(parseJsonl);
   } else {
     // No aggregate available: responses.jsonl is on the critical path.
-    const respText = await fetchTextRequired(`${source.basePath}/responses.jsonl`);
+    const respText = await responsesTextPromise;
     responses = parseJsonl(respText);
     if (gradeText) {
       aggregateRows = parseJsonl(gradeText).map(fromJudgeGradeRow);
