@@ -2308,10 +2308,8 @@ function loadEmbeddedDataset(cfg) {
 }
 
 async function loadDatasetCandidate(source) {
-  // Fire EVERY fetch (including the ~99 MB responses.jsonl) concurrently from the start so
-  // network time is shared. We only `await` the critical-path metadata before first paint
-  // and let responses.jsonl finish in the background, then replay the merge to fill
-  // token / cost / latency UI. Behavioural fallbacks for missing aggregate preserved.
+  // Stream responses.jsonl in parallel with everything else, but keep it off the await
+  // chain so first paint only blocks on the smaller metadata. Hydrate later.
   const responsesTextPromise = fetchTextRequired(`${source.basePath}/responses.jsonl`);
   const [stats, manifest, aggText, panel, summary, recentAdditions, launchText, paramsText, gradeText] = await Promise.all([
     fetchJsonRequired(`${source.basePath}/collection_stats.json`),
@@ -2331,13 +2329,10 @@ async function loadDatasetCandidate(source) {
   let responsesPromise = null;
 
   if (aggregateRows.length) {
-    // Aggregate is sufficient for first paint. responses.jsonl has been streaming since the
-    // top of this function; the caller awaits the parsed promise after the initial render.
     responsesPromise = responsesTextPromise.then(parseJsonl);
   } else {
-    // No aggregate available: responses.jsonl is on the critical path.
-    const respText = await responsesTextPromise;
-    responses = parseJsonl(respText);
+    // Aggregate missing: responses is the only row source, await it now.
+    responses = parseJsonl(await responsesTextPromise);
     if (gradeText) {
       aggregateRows = parseJsonl(gradeText).map(fromJudgeGradeRow);
       mode = "single_judge_grades";
@@ -2350,9 +2345,7 @@ async function loadDatasetCandidate(source) {
   return { source, responses, responsesPromise, stats, panel, summary, recentAdditions, manifest, launchText, paramsText, aggregateRows, mode };
 }
 
-// Replays the response-derived merge: S.rows (aggregate × responses join), S.usageByModel.
-// Called once with empty S.responses for the fast aggregate-only first paint, then again
-// after the deferred responses.jsonl fetch resolves to populate token/cost/latency UI.
+// Replayed once for the aggregate-only first paint and again once responses.jsonl arrives.
 function rebuildRowsAndUsageFromResponses() {
   const responseMap = new Map();
   S.responses.forEach(r => { if (r.sample_id) responseMap.set(r.sample_id, r); });
@@ -2455,9 +2448,6 @@ async function loadData() {
       });
     });
 
-    // Build merged rows + per-model usage aggregates from S.responses.
-    // Extracted so we can replay it once responses.jsonl finishes loading lazily
-    // (it carries token/cost/latency that isn't in aggregate.jsonl).
     rebuildRowsAndUsageFromResponses();
 
     // Load launch date metadata.
@@ -2496,20 +2486,14 @@ async function loadData() {
     renderAll();
     randomGreenRed();
 
-    // Lazy-hydrate token/cost/latency from the deferred responses.jsonl fetch and re-render
-    // so cost-vs-green-rate scatter and per-card cost/latency tags catch up to the stock view.
     if (loaded.responsesPromise) {
-      const chatgpt4oFilter2 = r => !/chatgpt.4o/i.test(r.model || "");
       loaded.responsesPromise.then(rawResponses => {
-        S.responses = rawResponses.filter(chatgpt4oFilter2);
+        S.responses = rawResponses.filter(chatgpt4oFilter);
         rebuildRowsAndUsageFromResponses();
         mergeLaunchRowsIntoMap(S.launchByModel, inferLaunchRowsFromResponses(S.responses, S.launchByModel));
         mergeLaunchRowsIntoMap(S.launchByModel, LOCAL_LAUNCH_OVERRIDES);
-        el.textContent = `Loaded ${S.rows.length} rows from ${loaded.source.name} (${loaded.mode}, ${cfg.key})`;
         renderAll();
-      }).catch(err => {
-        console.warn("Deferred responses.jsonl load failed; token/cost UI will stay empty.", err);
-      });
+      }).catch(err => console.warn("Deferred responses.jsonl load failed", err));
     }
   } catch(e) {
     el.textContent = `Error loading data: ${e.message}`;
