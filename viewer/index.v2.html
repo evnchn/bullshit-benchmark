@@ -2308,31 +2308,80 @@ function loadEmbeddedDataset(cfg) {
 }
 
 async function loadDatasetCandidate(source) {
-  const respText = await fetchTextRequired(`${source.basePath}/responses.jsonl`);
-  const stats = await fetchJsonRequired(`${source.basePath}/collection_stats.json`);
-  const manifest = source.supportsManifest === false ? null : await fetchJsonOptional(`${source.basePath}/manifest.json`);
-  const aggText = source.supportsAggregate === false ? "" : await fetchTextOptional(`${source.basePath}/aggregate.jsonl`);
-  const panel = source.supportsPanelSummary === false ? null : await fetchJsonOptional(`${source.basePath}/panel_summary.json`);
-  const summary = source.supportsAggregate === false ? null : await fetchJsonOptional(`${source.basePath}/aggregate_summary.json`);
-  const recentAdditions = await fetchJsonOptional(`${source.basePath}/recent_additions.json`);
-  const launchText = source.supportsLaunchMetadata === false ? "" : await fetchTextOptional(`${source.basePath}/model_launch_dates.csv`);
-  const paramsText = source.supportsModelParams === false ? "" : await fetchTextOptional(`${source.basePath}/model_params.csv`);
-  const gradeText = source.gradePath ? await fetchTextOptional(source.gradePath) : "";
+  // Stream responses.jsonl in parallel with everything else, but keep it off the await
+  // chain so first paint only blocks on the smaller metadata. Hydrate later.
+  const responsesTextPromise = fetchTextRequired(`${source.basePath}/responses.jsonl`);
+  const [stats, manifest, aggText, panel, summary, recentAdditions, launchText, paramsText, gradeText] = await Promise.all([
+    fetchJsonRequired(`${source.basePath}/collection_stats.json`),
+    source.supportsManifest === false ? Promise.resolve(null) : fetchJsonOptional(`${source.basePath}/manifest.json`),
+    source.supportsAggregate === false ? Promise.resolve("") : fetchTextOptional(`${source.basePath}/aggregate.jsonl`),
+    source.supportsPanelSummary === false ? Promise.resolve(null) : fetchJsonOptional(`${source.basePath}/panel_summary.json`),
+    source.supportsAggregate === false ? Promise.resolve(null) : fetchJsonOptional(`${source.basePath}/aggregate_summary.json`),
+    fetchJsonOptional(`${source.basePath}/recent_additions.json`),
+    source.supportsLaunchMetadata === false ? Promise.resolve("") : fetchTextOptional(`${source.basePath}/model_launch_dates.csv`),
+    source.supportsModelParams === false ? Promise.resolve("") : fetchTextOptional(`${source.basePath}/model_params.csv`),
+    source.gradePath ? fetchTextOptional(source.gradePath) : Promise.resolve(""),
+  ]);
 
-  const responses = parseJsonl(respText);
   let aggregateRows = aggText ? parseJsonl(aggText) : [];
   let mode = "aggregate";
+  let responses = [];
+  let responsesPromise = null;
 
-  if (!aggregateRows.length && gradeText) {
-    aggregateRows = parseJsonl(gradeText).map(fromJudgeGradeRow);
-    mode = "single_judge_grades";
-  }
-  if (!aggregateRows.length) {
-    aggregateRows = responses.map(fromResponseRow);
-    mode = "responses_only";
+  if (aggregateRows.length) {
+    responsesPromise = responsesTextPromise.then(parseJsonl);
+  } else {
+    // Aggregate missing: responses is the only row source, await it now.
+    responses = parseJsonl(await responsesTextPromise);
+    if (gradeText) {
+      aggregateRows = parseJsonl(gradeText).map(fromJudgeGradeRow);
+      mode = "single_judge_grades";
+    } else {
+      aggregateRows = responses.map(fromResponseRow);
+      mode = "responses_only";
+    }
   }
 
-  return { source, responses, stats, panel, summary, recentAdditions, manifest, launchText, paramsText, aggregateRows, mode };
+  return { source, responses, responsesPromise, stats, panel, summary, recentAdditions, manifest, launchText, paramsText, aggregateRows, mode };
+}
+
+// Replayed once for the aggregate-only first paint and again once responses.jsonl arrives.
+function rebuildRowsAndUsageFromResponses() {
+  const responseMap = new Map();
+  S.responses.forEach(r => { if (r.sample_id) responseMap.set(r.sample_id, r); });
+
+  S.rows = S.aggregateRows.map(agg => {
+    const resp = responseMap.get(agg.sample_id) || {};
+    const qm = questionMeta(agg.question_id);
+    return {
+      ...agg,
+      response_text: agg.response_text || resp.response_text || "",
+      question: agg.question || resp.question || "",
+      nonsensical_element: agg.nonsensical_element || resp.nonsensical_element || "",
+      response_usage: resp.response_usage || null,
+      response_latency_ms: resp.response_latency_ms || null,
+      domain_group: qm.domain_group || "",
+      difficulty: qm.difficulty || "",
+      difficulty_label: qm.difficulty_label || "",
+    };
+  });
+
+  const modelUsage = new Map();
+  S.rows.forEach(r => {
+    const mk = modelKey(r);
+    if (!modelUsage.has(mk)) modelUsage.set(mk, { total:0, prompt:0, completion:0, reasoning:0, cost:0, count:0, latency:0 });
+    const u = modelUsage.get(mk);
+    if (r.response_usage) {
+      u.prompt += responsePromptTokens(r);
+      u.completion += responseCompletionTokens(r);
+      u.total += responseTotalTokens(r);
+      u.reasoning += responseReasoningTokens(r);
+      u.cost += responseCostUsd(r);
+      u.latency += (r.response_latency_ms || 0);
+      u.count++;
+    }
+  });
+  S.usageByModel = modelUsage;
 }
 
 // ====== DATA LOADING ======
@@ -2399,52 +2448,7 @@ async function loadData() {
       });
     });
 
-    // Build usage map: sample_id -> usage object
-    const usageBySample = new Map();
-    S.responses.forEach(r => {
-      if (r.sample_id && r.response_usage) {
-        usageBySample.set(r.sample_id, r.response_usage);
-      }
-    });
-
-    // Build merged rows from aggregate (which has judge scores) + response usage
-    const responseMap = new Map();
-    S.responses.forEach(r => { if(r.sample_id) responseMap.set(r.sample_id, r); });
-
-    S.rows = S.aggregateRows.map(agg => {
-      const resp = responseMap.get(agg.sample_id) || {};
-      const qm = questionMeta(agg.question_id);
-      return {
-        ...agg,
-        response_text: agg.response_text || resp.response_text || "",
-        question: agg.question || resp.question || "",
-        nonsensical_element: agg.nonsensical_element || resp.nonsensical_element || "",
-        response_usage: resp.response_usage || null,
-        response_latency_ms: resp.response_latency_ms || null,
-        domain_group: qm.domain_group || "",
-        difficulty: qm.difficulty || "",
-        difficulty_label: qm.difficulty_label || "",
-      };
-    });
-
-    // Build per-model usage aggregates
-    const modelUsage = new Map();
-    S.rows.forEach(r => {
-      const mk = modelKey(r);
-      if (!modelUsage.has(mk)) modelUsage.set(mk, { total:0, prompt:0, completion:0, reasoning:0, cost:0, count:0, latency:0 });
-      const u = modelUsage.get(mk);
-      const usage = r.response_usage;
-      if (usage) {
-        u.prompt += responsePromptTokens(r);
-        u.completion += responseCompletionTokens(r);
-        u.total += responseTotalTokens(r);
-        u.reasoning += responseReasoningTokens(r);
-        u.cost += responseCostUsd(r);
-        u.latency += (r.response_latency_ms||0);
-        u.count++;
-      }
-    });
-    S.usageByModel = modelUsage;
+    rebuildRowsAndUsageFromResponses();
 
     // Load launch date metadata.
     // Merge embedded launch rows with CSV launch metadata so local file updates
@@ -2481,6 +2485,16 @@ async function loadData() {
     refreshFilters();
     renderAll();
     randomGreenRed();
+
+    if (loaded.responsesPromise) {
+      loaded.responsesPromise.then(rawResponses => {
+        S.responses = rawResponses.filter(chatgpt4oFilter);
+        rebuildRowsAndUsageFromResponses();
+        mergeLaunchRowsIntoMap(S.launchByModel, inferLaunchRowsFromResponses(S.responses, S.launchByModel));
+        mergeLaunchRowsIntoMap(S.launchByModel, LOCAL_LAUNCH_OVERRIDES);
+        renderAll();
+      }).catch(err => console.warn("Deferred responses.jsonl load failed", err));
+    }
   } catch(e) {
     el.textContent = `Error loading data: ${e.message}`;
     console.error(e);
